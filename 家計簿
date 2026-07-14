@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>かんたん家計簿</title>
+<style>
+  :root {
+    --paper: #FBF8F2;
+    --paper-line: #E4DCC8;
+    --ink: #2E2A24;
+    --income: #2F6F4E;
+    --expense: #B0392B;
+    --accent: #8C6A3F;
+    --muted: #948B78;
+    --shadow: rgba(46, 42, 36, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 28px 16px 60px;
+  }
+
+  .app { width: min(480px, 100%); }
+
+  h1 {
+    font-size: 1.3rem;
+    letter-spacing: 0.08em;
+    margin: 0 0 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  h1 span { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.05em; }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin: 16px 0 18px;
+    border-bottom: 1px solid var(--paper-line);
+  }
+  .tabs button {
+    flex: 1;
+    padding: 9px 0;
+    background: none;
+    border: none;
+    font-size: 0.82rem;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+  }
+  .tabs button.active {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+    font-weight: 700;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 0 0 20px;
+  }
+  .summary .card {
+    background: #fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+    box-shadow: 0 2px 6px var(--shadow);
+  }
+  .summary .card .label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; }
+  .summary .card .num { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary .income .num { color: var(--income); }
+  .summary .expense .num { color: var(--expense); }
+
+  form {
+    background: #fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px var(--shadow);
+    margin-bottom: 22px;
+  }
+
+  .type-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+  .type-toggle button {
+    flex: 1;
+    padding: 8px 0;
+    border-radius: 8px;
+    border: 1px solid var(--paper-line);
+    background: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .type-toggle button.active[data-type="income"] { background: var(--income); border-color: var(--income); color: #fff; }
+  .type-toggle button.active[data-type="expense"] { background: var(--expense); border-color: var(--expense); color: #fff; }
+
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row > * { flex: 1; }
+
+  label { display: block; font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; }
+
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--paper-line);
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: #fdfcf9;
+  }
+
+  .add-btn {
+    width: 100%;
+    padding: 11px 0;
+    margin-top: 4px;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+  }
+
+  .list-title { font-size: 0.8rem; color: var(--muted); margin: 0 0 8px 4px; display:flex; justify-content:space-between; align-items:center; }
+
+  .entry { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--paper-line); }
+  .entry .date { font-size: 0.7rem; color: var(--muted); width: 44px; flex-shrink: 0; }
+  .entry .info { flex: 1; min-width: 0; }
+  .entry .category { font-size: 0.9rem; }
+  .entry .memo { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry .amount { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .entry.income .amount { color: var(--income); }
+  .entry.expense .amount { color: var(--expense); }
+  .entry .del { background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+
+  .empty { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 30px 0; }
+  .status { text-align: center; font-size: 0.7rem; color: var(--muted); margin-top: 16px; min-height: 14px; }
+
+  /* --- グラフタブ --- */
+  .month-select { margin-bottom: 16px; }
+  .month-select select { max-width: 200px; }
+
+  .pie-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    background: #fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .pie-toggle { display: flex; gap: 8px; width: 100%; }
+  .pie-toggle button {
+    flex: 1;
+    padding: 7px 0;
+    border-radius: 8px;
+    border: 1px solid var(--paper-line);
+    background: #fff;
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .pie-toggle button.active[data-type="income"] { background: var(--income); border-color: var(--income); color: #fff; }
+  .pie-toggle button.active[data-type="expense"] { background: var(--expense); border-color: var(--expense); color: #fff; }
+
+  .donut {
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    position: relative;
+  }
+  .donut::after {
+    content: "";
+    position: absolute;
+    inset: 26px;
+    background: #fff;
+    border-radius: 50%;
+  }
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 2;
+  }
+  .donut-center .total-label { font-size: 0.65rem; color: var(--muted); }
+  .donut-center .total-num { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .legend { width: 100%; }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 0.83rem;
+    border-bottom: 1px solid var(--paper-line);
+  }
+  .legend-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-row .name { flex: 1; }
+  .legend-row .pct { color: var(--muted); width: 40px; text-align: right; }
+  .legend-row .amt { font-variant-numeric: tabular-nums; font-weight: 600; width: 80px; text-align: right; }
+
+  /* --- 月別比較タブ --- */
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--paper-line);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  table.compare th, table.compare td {
+    padding: 10px 8px;
+    text-align: right;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+  table.compare th:first-child, table.compare td:first-child { text-align: left; }
+  table.compare thead th {
+    background: var(--paper-line);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.75rem;
+  }
+  table.compare tbody tr:not(:last-child) td { border-bottom: 1px solid var(--paper-line); }
+  table.compare td.income { color: var(--income); }
+  table.compare td.expense { color: var(--expense); }
+  table.compare td.balance.plus { color: var(--income); font-weight: 700; }
+  table.compare td.balance.minus { color: var(--expense); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>かんたん家計簿 <span>この端末に自動保存されます</span></h1>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="input">入力・履歴</button>
+    <button class="tab-btn" data-tab="chart">円グラフ</button>
+    <button class="tab-btn" data-tab="compare">月別比較</button>
+  </div>
+
+  <!-- タブ1: 入力・履歴 -->
+  <div class="tab-panel active" id="panel-input">
+    <div class="summary">
+      <div class="card income"><div class="label">今月の収入</div><div class="num" id="sumIncome">¥0</div></div>
+      <div class="card expense"><div class="label">今月の支出</div><div class="num" id="sumExpense">¥0</div></div>
+      <div class="card balance"><div class="label">残高</div><div class="num" id="sumBalance">¥0</div></div>
+    </div>
+
+    <form id="entryForm">
+      <div class="type-toggle">
+        <button type="button" data-type="expense" class="active">支出</button>
+        <button type="button" data-type="income">収入</button>
+      </div>
+      <div class="row">
+        <div><label>日付</label><input type="date" id="date" required></div>
+        <div><label>金額</label><input type="number" id="amount" placeholder="1000" min="0" required></div>
+      </div>
+      <div class="row">
+        <div><label>カテゴリ</label><select id="category"></select></div>
+        <div><label>メモ（任意）</label><input type="text" id="memo" placeholder="スーパー など"></div>
+      </div>
+      <button type="submit" class="add-btn">記録する</button>
+    </form>
+
+    <div class="list-title">履歴</div>
+    <div id="list"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <!-- タブ2: 円グラフ -->
+  <div class="tab-panel" id="panel-chart">
+    <div class="month-select">
+      <label>表示する月</label>
+      <select id="chartMonth"></select>
+    </div>
+    <div class="pie-wrap">
+      <div class="pie-toggle">
+        <button type="button" data-type="expense" class="active">支出の内訳</button>
+        <button type="button" data-type="income">収入の内訳</button>
+      </div>
+      <div class="donut" id="donut">
+        <div class="donut-center">
+          <div class="total-label" id="donutLabel">支出合計</div>
+          <div class="total-num" id="donutTotal">¥0</div>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <!-- タブ3: 月別比較 -->
+  <div class="tab-panel" id="panel-compare">
+    <table class="compare">
+      <thead><tr><th>月</th><th>収入</th><th>支出</th><th>差額</th></tr></thead>
+      <tbody id="compareBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const expenseCategories = ["食費", "日用品", "交通費", "交際費", "住居", "光熱費", "娯楽", "その他"];
+  const incomeCategories = ["給料", "副業", "お小遣い", "その他"];
+  const palette = ["#B0392B","#2F6F4E","#8C6A3F","#4472C4","#C9A66B","#6B4F3A","#7A8B99","#A65C3B","#5B7B5E","#9C6B98"];
+
+  const form = document.getElementById('entryForm');
+  const dateInput = document.getElementById('date');
+  const amountInput = document.getElementById('amount');
+  const categorySelect = document.getElementById('category');
+  const memoInput = document.getElementById('memo');
+  const listEl = document.getElementById('list');
+  const statusEl = document.getElementById('status');
+  const toggleBtns = document.querySelectorAll('#entryForm .type-toggle button');
+
+  let currentType = 'expense';
+  let chartType = 'expense';
+  let entries = [];
+  const STORAGE_KEY = 'kakeibo:entries';
+
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+  dateInput.value = todayStr();
+
+  function fillCategories() {
+    const list = currentType === 'expense' ? expenseCategories : incomeCategories;
+    categorySelect.innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+  fillCategories();
+
+  toggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      toggleBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentType = btn.dataset.type;
+      fillCategories();
+    });
+  });
+
+  // --- タブ切り替え ---
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'chart') renderChart();
+      if (btn.dataset.tab === 'compare') renderCompare();
+    });
+  });
+
+  document.querySelectorAll('.pie-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pie-toggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      chartType = btn.dataset.type;
+      renderChart();
+    });
+  });
+
+  document.getElementById('chartMonth').addEventListener('change', renderChart);
+
+  async function loadEntries() {
+    try {
+      const res = await window.storage.get(STORAGE_KEY, false);
+      entries = res && res.value ? JSON.parse(res.value) : [];
+    } catch (e) { entries = []; }
+    render();
+  }
+
+  async function saveEntries() {
+    try {
+      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
+      statusEl.textContent = result ? '保存しました' : '保存に失敗しました';
+    } catch (e) {
+      statusEl.textContent = '保存エラー：この端末にのみ一時保存されています';
+    }
+    setTimeout(() => { statusEl.textContent = ''; }, 1500);
+  }
+
+  function formatYen(n) { return '¥' + Math.round(n).toLocaleString('ja-JP'); }
+
+  function getMonthList() {
+    const months = new Set(entries.map(e => e.date.slice(0, 7)));
+    months.add(todayStr().slice(0, 7));
+    return [...months].sort().reverse();
+  }
+
+  function render() {
+    const ym = todayStr().slice(0, 7);
+    let income = 0, expense = 0;
+    entries.forEach(e => {
+      if (e.date.slice(0, 7) === ym) {
+        if (e.type === 'income') income += e.amount; else expense += e.amount;
+      }
+    });
+    document.getElementById('sumIncome').textContent = formatYen(income);
+    document.getElementById('sumExpense').textContent = formatYen(expense);
+    document.getElementById('sumBalance').textContent = formatYen(income - expense);
+
+    if (entries.length === 0) {
+      listEl.innerHTML = '<div class="empty">まだ記録がありません</div>';
+    } else {
+      const sorted = [...entries].sort((a, b) => (a.date < b.date ? 1 : -1));
+      listEl.innerHTML = sorted.map(e => {
+        const [y, m, d] = e.date.split('-');
+        return `
+          <div class="entry ${e.type}" data-id="${e.id}">
+            <div class="date">${m}/${d}</div>
+            <div class="info">
+              <div class="category">${e.category}</div>
+              ${e.memo ? `<div class="memo">${escapeHtml(e.memo)}</div>` : ''}
+            </div>
+            <div class="amount">${e.type === 'income' ? '+' : '-'}${formatYen(e.amount)}</div>
+            <button class="del" data-id="${e.id}" title="削除">×</button>
+          </div>`;
+      }).join('');
+      listEl.querySelectorAll('.del').forEach(btn => {
+        btn.addEventListener('click', () => {
+          entries = entries.filter(e => e.id !== btn.dataset.id);
+          render();
+          saveEntries();
+        });
+      });
+    }
+
+    // 月選択リストを更新（グラフタブ用）
+    const chartMonthSel = document.getElementById('chartMonth');
+    const prevVal = chartMonthSel.value;
+    const months = getMonthList();
+    chartMonthSel.innerHTML = months.map(m => `<option value="${m}">${m.replace('-', '年')}月</option>`).join('');
+    chartMonthSel.value = months.includes(prevVal) ? prevVal : months[0];
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const amount = parseInt(amountInput.value, 10);
+    if (!amount || amount <= 0) return;
+    entries.push({
+      id: Date.now().toString(),
+      type: currentType,
+      date: dateInput.value || todayStr(),
+      category: categorySelect.value,
+      amount: amount,
+      memo: memoInput.value.trim()
+    });
+    amountInput.value = '';
+    memoInput.value = '';
+    render();
+    saveEntries();
+  });
+
+  // --- 円グラフ描画 ---
+  function renderChart() {
+    const month = document.getElementById('chartMonth').value;
+    const donut = document.getElementById('donut');
+    const legend = document.getElementById('legend');
+    const donutLabel = document.getElementById('donutLabel');
+    const donutTotal = document.getElementById('donutTotal');
+
+    donutLabel.textContent = chartType === 'expense' ? '支出合計' : '収入合計';
+
+    const filtered = entries.filter(e => e.date.slice(0, 7) === month && e.type === chartType);
+    const totals = {};
+    filtered.forEach(e => { totals[e.category] = (totals[e.category] || 0) + e.amount; });
+
+    const sortedCats = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    const total = sortedCats.reduce((s, [, v]) => s + v, 0);
+    donutTotal.textContent = formatYen(total);
+
+    if (total === 0) {
+      donut.style.background = '#EDE7D8';
+      legend.innerHTML = '<div class="empty">この月のデータがありません</div>';
+      return;
+    }
+
+    let currentDeg = 0;
+    const stops = sortedCats.map(([cat, amt], i) => {
+      const deg = amt / total * 360;
+      const start = currentDeg;
+      currentDeg += deg;
+      return `${palette[i % palette.length]} ${start}deg ${currentDeg}deg`;
+    }).join(', ');
+    donut.style.background = `conic-gradient(${stops})`;
+
+    legend.innerHTML = sortedCats.map(([cat, amt], i) => {
+      const pct = Math.round(amt / total * 100);
+      return `
+        <div class="legend-row">
+          <div class="dot" style="background:${palette[i % palette.length]}"></div>
+          <div class="name">${cat}</div>
+          <div class="pct">${pct}%</div>
+          <div class="amt">${formatYen(amt)}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // --- 月別比較テーブル ---
+  function renderCompare() {
+    const monthly = {};
+    entries.forEach(e => {
+      const ym = e.date.slice(0, 7);
+      if (!monthly[ym]) monthly[ym] = { income: 0, expense: 0 };
+      monthly[ym][e.type] += e.amount;
+    });
+    const months = Object.keys(monthly).sort().reverse();
+    const body = document.getElementById('compareBody');
+
+    if (months.length === 0) {
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px 0;">まだ記録がありません</td></tr>';
+      return;
+    }
+
+    body.innerHTML = months.map(m => {
+      const { income, expense } = monthly[m];
+      const balance = income - expense;
+      return `
+        <tr>
+          <td>${m.replace('-', '年')}月</td>
+          <td class="income">${formatYen(income)}</td>
+          <td class="expense">${formatYen(expense)}</td>
+          <td class="balance ${balance >= 0 ? 'plus' : 'minus'}">${balance >= 0 ? '+' : ''}${formatYen(balance)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  loadEntries();
+</script>
+</body>
+</html>
